@@ -4,10 +4,10 @@
  */
 package com.tbs.companywebservice.resources;
 
-import com.tbs.companywebservice.models.Employee;
-import com.tbs.companywebservice.models.Department;
 import com.tbs.companywebservice.CompanyDataSQL;
-import com.tbs.companywebservice.HTTPCodes;
+import com.tbs.companywebservice.ErrorCodes;
+import com.tbs.companywebservice.models.Department;
+import com.tbs.companywebservice.models.Employee;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -27,8 +27,6 @@ import java.util.List;
 @Path("company")
 public class CompanyResource {
   private CompanyDataSQL companyData = new CompanyDataSQL();
-  private static int departmentCounter = 1;
-  private static int employeeCounter = 1;
   
   // create a department
   
@@ -36,9 +34,10 @@ public class CompanyResource {
   @Path("departments")
   @Consumes(MediaType.APPLICATION_JSON)
   public Response createDepartment(Department department) {
-    department.setId(departmentCounter++);
-    if(!companyData.createDepartment(department)) return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
-    else return Response.status(HTTPCodes.CREATED).build();
+    int returnCode = companyData.createDepartment(department);
+    if(returnCode == -1) return Response.status(ErrorCodes.INTERNAL_SERVER_ERROR).build();
+    else if(returnCode == 0) return Response.status(ErrorCodes.CONFLICT).build();
+    else return Response.status(ErrorCodes.CREATED).build();
   }
   
   // read all departments
@@ -48,7 +47,8 @@ public class CompanyResource {
   @Produces(MediaType.APPLICATION_JSON)
   public Response readDepartments() {
     List<Department> departments = companyData.readAllDepartments();
-    return Response.ok(departments).build();
+    if(departments == null) return Response.status(ErrorCodes.INTERNAL_SERVER_ERROR).build();
+    else return Response.ok(departments).build();
   }
   
   // bulk update departments
@@ -57,8 +57,10 @@ public class CompanyResource {
   @Path("departments")
   @Consumes(MediaType.APPLICATION_JSON)
   public Response updateDepartments(List<Department> departments) {
-    companyData.bulkUpdateDepartments(departments);
-    return Response.ok("Departments updated").build();
+    int rowsUpdated = companyData.bulkUpdateDepartments(departments);
+    if(rowsUpdated == -1) return Response.status(ErrorCodes.INTERNAL_SERVER_ERROR).build();
+    else if(rowsUpdated < departments.size()) return Response.status(ErrorCodes.NOT_FOUND).build();
+    else return Response.ok("Departments updated:" + rowsUpdated).build();
   }
   
   // delete all departments
@@ -66,8 +68,10 @@ public class CompanyResource {
   @DELETE
   @Path("departments")
   public Response deleteDepartments() {
-    companyData.deleteAllDepartments();
-    return Response.ok().build();
+    System.out.println("deleteDepartments");
+    Boolean returnCode = companyData.deleteAllDepartments();
+    if(!returnCode) return Response.status(ErrorCodes.INTERNAL_SERVER_ERROR).build();
+    else return Response.status(ErrorCodes.NO_CONTENT).build();
   }
   
   // method not allowed 405
@@ -75,7 +79,7 @@ public class CompanyResource {
   @POST
   @Path("departments/{id}")
   public Response createDepartment(@PathParam("id") int id) {
-    return Response.status(HTTPCodes.METHOD_NOT_ALLOWED).build();
+    return Response.status(ErrorCodes.METHOD_NOT_ALLOWED).build();
   }
   
   // return department with ID
@@ -85,7 +89,8 @@ public class CompanyResource {
   @Produces(MediaType.APPLICATION_JSON)
   public Response readDepartment(@PathParam("id") int id) {
     Department department = companyData.readDepartment(id);
-    return Response.ok(department).build();
+    if(department == null) return Response.status(ErrorCodes.NOT_FOUND).build();
+    else return Response.ok(department).build();
   }
  
   // update department with ID
@@ -94,17 +99,23 @@ public class CompanyResource {
   @Path("departments/{id}")
   @Consumes(MediaType.APPLICATION_JSON)
   public Response updateDepartment(@PathParam("id") int id, Department department) {
-    companyData.updateDepartment(id, department);
-    return Response.ok().build();
+    int rowsUpdated = companyData.updateDepartment(id, department);
+    if(rowsUpdated == -1) return Response.status(ErrorCodes.INTERNAL_SERVER_ERROR).build();
+    else if (rowsUpdated == 0) return Response.status(ErrorCodes.NOT_FOUND).build();
+    return Response.ok("Department updated").build();
   }
   
   // ID delete department with ID
 
   @DELETE
-  @Path("department/{id}")
+  @Path("departments/{id}")
   public Response deleteDepartment(@PathParam("id") int id) {
-    companyData.deleteDepartment(id);
-    return Response.ok().build();
+    int returnCode = -1;
+    returnCode = companyData.deleteAllEmployeesFromDepartment(id);
+    if(returnCode != -1) returnCode = companyData.deleteDepartment(id);
+    if(returnCode == -1) return Response.status(ErrorCodes.INTERNAL_SERVER_ERROR).build();
+    else if(returnCode == 0) return Response.status(ErrorCodes.NOT_FOUND).build();
+    else return Response.status(ErrorCodes.NO_CONTENT).build();
   }
   
   // create an employee
@@ -113,9 +124,10 @@ public class CompanyResource {
   @Path("employees")
   @Consumes(MediaType.APPLICATION_JSON)
    public Response createEmployee(Employee employee) {
-    employee.setId(employeeCounter++);
-    companyData.createEmployee(employee);
-    return Response.status(Response.Status.CREATED).build();
+    int returnCode = companyData.createEmployee(employee);
+    if(returnCode == -1) return Response.status(ErrorCodes.INTERNAL_SERVER_ERROR).build();
+    else if(returnCode == 0) return Response.status(ErrorCodes.CONFLICT).build();
+    else return Response.status(ErrorCodes.OK).build();
   }
 
   // return all employees
@@ -125,7 +137,8 @@ public class CompanyResource {
   @Produces(MediaType.APPLICATION_JSON)
   public Response readAllEmployees() {
     List<Employee> employees = companyData.readAllEmployees();
-    return Response.ok(employees).build();
+    if(employees == null) return Response.status(ErrorCodes.INTERNAL_SERVER_ERROR).build();
+    else return Response.ok(employees).build();
   }
   
   // bulk update employees
@@ -133,9 +146,11 @@ public class CompanyResource {
   @PUT
   @Path("employees")
   @Consumes(MediaType.APPLICATION_JSON)
-  public Response updateEmployees(@PathParam("id") int id, List<Employee> employees) {
-    companyData.bulkUpdateEmployees(employees);
-    return Response.ok().build();
+  public Response updateEmployees(List<Employee> employees) {
+    int rowsUpdated = companyData.bulkUpdateEmployees(employees);
+    if(rowsUpdated == -1) return Response.status(ErrorCodes.INTERNAL_SERVER_ERROR).build();
+    else if(rowsUpdated < employees.size()) return Response.status(ErrorCodes.NOT_FOUND).build();
+    return Response.ok("Employees updated " + rowsUpdated).build();
   }
   
   // delete all employees
@@ -143,16 +158,17 @@ public class CompanyResource {
   @DELETE
   @Path("employees")
   public Response deleteAllEmployees() {
-    companyData.deleteAllEmployees();
-    return Response.ok().build();
+    Boolean success = companyData.deleteAllEmployees();
+    if(!success) return Response.status(ErrorCodes.INTERNAL_SERVER_ERROR).build();
+    else return Response.status(ErrorCodes.NO_CONTENT,"Employees deleted").build();
   }
   
   // method not allowed 405
 
   @POST
   @Path("employees/{id}")
-  public Response createEmployeeWithId(Employee employee, @PathParam("id") int id) {
-    return Response.status(HTTPCodes.METHOD_NOT_ALLOWED).build();
+  public Response createEmployee(@PathParam("id") int id) {
+    return Response.status(ErrorCodes.METHOD_NOT_ALLOWED).build();
   }
 
   // return employee with ID
@@ -162,6 +178,7 @@ public class CompanyResource {
   @Produces(MediaType.APPLICATION_JSON)
   public Response readEmployee(@PathParam("id") int id) {
     Employee employee = companyData.readEmployee(id);
+    if(employee == null) return Response.status(ErrorCodes.NOT_FOUND).build();
     return Response.ok(employee).build();
   }
   
@@ -171,8 +188,11 @@ public class CompanyResource {
   @Path("employees/{id}")
   @Consumes(MediaType.APPLICATION_JSON)
   public Response updateEmployee(@PathParam("id") int id, Employee employee) {
-    companyData.updateEmployee(id, employee);
-    return Response.ok().build();
+    int returnCode = companyData.updateEmployee(id, employee);
+    if(returnCode == -2) return Response.status(ErrorCodes.BAD_REQUEST).build();
+    else if(returnCode == -1) return Response.status(ErrorCodes.INTERNAL_SERVER_ERROR).build();
+    else if(returnCode == 0) return Response.status(ErrorCodes.NOT_FOUND).build();
+    else return Response.ok("Employee updated").build();
   }
 
   // delete employee with ID
@@ -180,16 +200,17 @@ public class CompanyResource {
   @DELETE
   @Path("employees/{id}")
   public Response deleteEmployee(@PathParam("id") int id) {
-    companyData.deleteEmployee(id);
-    return Response.ok().build();
+    int rowsDeleted = companyData.deleteEmployee(id);
+    if(rowsDeleted == -1) return Response.status(ErrorCodes.INTERNAL_SERVER_ERROR).build();
+    else return Response.status(ErrorCodes.NO_CONTENT).build();
   }
     
   // method not allowed 405
   
   @POST
   @Path("departments/{id}/employees")
-  public Response createEmployeeFromDepartment(Employee employee) {
-    return Response.status(HTTPCodes.METHOD_NOT_ALLOWED).build();
+  public Response createEmployeeFromDepartment(@PathParam("id") int id, Employee employee) {
+    return Response.status(ErrorCodes.METHOD_NOT_ALLOWED).build();
   }
   
   // return employees from department with ID
@@ -198,7 +219,9 @@ public class CompanyResource {
   @Path("departments/{id}/employees")
   @Produces(MediaType.APPLICATION_JSON)
   public Response readEmployeesFromDepartment(@PathParam("id") int id) {
-    return Response.ok(companyData.readEmployeesFromDepartment(id)).build();
+    List<Employee> employees = companyData.readEmployeesFromDepartment(id);
+    if(employees == null) return Response.status(ErrorCodes.INTERNAL_SERVER_ERROR,"Database Error or Department does not exist.").build();
+    else return Response.ok(employees).build();
   }
   
   // update employees from department with ID
@@ -206,7 +229,7 @@ public class CompanyResource {
   @PUT
   @Path("departments/{id}/employees")
   public Response updateEmployeesFromDepartment() {
-    return Response.status(HTTPCodes.METHOD_NOT_ALLOWED).build();
+    return Response.status(ErrorCodes.METHOD_NOT_ALLOWED).build();
   }
   
   // delete employees from department with ID
@@ -214,7 +237,8 @@ public class CompanyResource {
   @DELETE
   @Path("departments/{id}/employees")
   public Response deleteEmployeesFromDepartment(@PathParam("id") int id) {
-    companyData.deleteAllEmployeesFromDepartment(id);
-    return Response.ok().build();
+    int rowsDeleted = companyData.deleteAllEmployeesFromDepartment(id);
+    if(rowsDeleted == -1) return Response.status(ErrorCodes.INTERNAL_SERVER_ERROR,"Database Error").build();
+    return Response.status(ErrorCodes.NO_CONTENT,"Employees deleted " + rowsDeleted).build();
   }
 }

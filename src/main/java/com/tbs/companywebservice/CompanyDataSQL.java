@@ -64,36 +64,30 @@ public class CompanyDataSQL {
   
   // RESTful API /departments
   
-  public boolean createDepartment(Department department) {
-    boolean result = false;
-    if (selectColumnFromTable("name", "Departments", department.getName()) != 0) {
-      System.out.println("Department exists");
-    }
-    else {
+  public int createDepartment(Department department) {
+    int rowsInserted = -1;
+    if (selectColumnFromTable("name", "Departments", department.getName()) == 0) {
       try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
         String sqlCommand = "INSERT IGNORE INTO Departments (name, location) VALUES (?, ?)";
         PreparedStatement statement = connection.prepareStatement(sqlCommand);
         statement.setString(1, department.getName());
         statement.setString(2, department.getLocation());
-        int rowsInserted = statement.executeUpdate();
-        if(rowsInserted > 0) {
-          System.out.println("Department inserted " + rowsInserted);
-          result = true;
-        }
+        rowsInserted = statement.executeUpdate();
       }
       catch (SQLException e) {
         System.err.println(e.getMessage());
       }
     }
-    return result;
+    return rowsInserted;
   }
   
   public List<Department> readAllDepartments() {
-    List<Department> departments = new ArrayList<>();
+    List<Department> departments = null;
     try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
       String sqlCommand = "SELECT * FROM Departments";
       Statement statement = connection.createStatement();
       ResultSet resultSet = statement.executeQuery(sqlCommand);
+      departments = new ArrayList<Department>();
       while (resultSet.next()) {
         Integer id = resultSet.getInt("id");
         String name = resultSet.getString("name");
@@ -108,32 +102,40 @@ public class CompanyDataSQL {
     return departments;
   }
   
-  public void bulkUpdateDepartments(List<Department> departments) {
-    try (Connection connection = DriverManager.getConnection(URI, "root", "root")) {
+  public int bulkUpdateDepartments(List<Department> departments) {
+    int rowsUpdated = -1;
+    try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
+      rowsUpdated = 0;
       for(Department department : departments) {      
         String sqlCommand = "UPDATE Departments SET name=?, location=? WHERE id=?";
         PreparedStatement statement = connection.prepareStatement(sqlCommand);
         statement.setString(1, department.getName());
         statement.setString(2, department.getLocation());
         statement.setInt(3, department.getId());
-        int rowsUpdated = statement.executeUpdate();
-        if (rowsUpdated > 0) System.out.println("Departments updated " + rowsUpdated);
+        rowsUpdated += statement.executeUpdate();
       }
     }
     catch (SQLException e) {
       System.err.println(e.getMessage());
     }
+    return rowsUpdated;
   }
   
-  public void deleteAllDepartments() { 
-    try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
-      String sqlCommand = "DELETE FROM Departments";
+  public Boolean deleteAllDepartments() {
+    Boolean result = false;
+    try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {   
+      String sqlCommand = "DELETE FROM Employees";
       Statement statement = connection.createStatement();
+      statement.execute(sqlCommand);      
+      sqlCommand = "DELETE FROM Departments";
+      statement = connection.createStatement();
       statement.execute(sqlCommand);
+      result = true;
     }
     catch (SQLException e) {
       System.err.println(e.getMessage());
     }
+    return result;
   }
 
   // RESTful API /departments/ID
@@ -157,40 +159,44 @@ public class CompanyDataSQL {
     return department;
   }
   
-  public void updateDepartment(int id, Department department) {
+  public int updateDepartment(int id, Department department) {
+    int rowsUpdated = -1;
     try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
       String sqlCommand = "UPDATE Departments SET name=?, location=? WHERE id=?";
       PreparedStatement statement = connection.prepareStatement(sqlCommand);
       statement.setString(1, department.getName());
       statement.setString(2, department.getLocation());
       statement.setInt(3, id);
-      int rowsUpdated = statement.executeUpdate();
+      rowsUpdated = statement.executeUpdate();
       if (rowsUpdated > 0) System.out.println("Departments updated " + rowsUpdated);
     }
     catch (SQLException e) {
       System.err.println(e.getMessage());
     }
+    return rowsUpdated;
   }
   
-  public void deleteDepartment(int id) {
+  public int deleteDepartment(int id) {
+    int rowsDeleted = -1;
     try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
       String sqlCommand = "DELETE FROM Departments WHERE id=?";
       PreparedStatement statement = connection.prepareStatement(sqlCommand);
       statement.setInt(1, id);
-      int rowsDeleted = statement.executeUpdate();
-      if(rowsDeleted > 0) System.out.println("Departments deleted " + rowsDeleted);
+      rowsDeleted = statement.executeUpdate();
     }
     catch (SQLException e) {
       System.err.println(e.getMessage());
     }
+    return rowsDeleted;
   }
   
   // RESTful API /employees
           
-  public boolean createEmployee(Employee employee) {
-    boolean result = false;
-    if (selectColumnFromTable("name", "Employees", employee.getName()) != 0) {
-      System.out.println("Employee exists");
+  public int createEmployee(Employee employee) {
+    int rowsInserted = -1;
+    if ((employeeExists(employee) > 0) ||
+        (departmentExists(employee.getDepartmentId()) < 1)) {
+      rowsInserted = 0;
     }
     else {
       try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
@@ -201,26 +207,23 @@ public class CompanyDataSQL {
         statement.setString(3, employee.getEmail());
         statement.setString(4, employee.getStartDate());
         statement.setInt(5, employee.getDepartmentId());
-        int rowsInserted = statement.executeUpdate();
-        if(rowsInserted > 0) {
-          System.out.println("Employee inserted " + rowsInserted);
-          result = true;
-        }
-      } 
+        rowsInserted = statement.executeUpdate();
+      }
       catch (SQLException e) {
         System.err.println(e.getMessage());
       }
     }
-    return result;
+    return rowsInserted;
   }
   
   public List<Employee> readAllEmployees() {
-    List<Employee> employees = new ArrayList<>();
+    List<Employee> employees = null;
     try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
       String sqlCommand = "SELECT * FROM Employees";
       Statement statement = connection.createStatement();
       ResultSet resultSet = statement.executeQuery(sqlCommand);
       int count = 0;
+      employees = new ArrayList<>();
       while (resultSet.next()) {
         Integer id = resultSet.getInt("id");
         String name = resultSet.getString("name");
@@ -239,8 +242,10 @@ public class CompanyDataSQL {
     return employees;
   }
   
-  public void bulkUpdateEmployees(List<Employee> employees) {
+  public int bulkUpdateEmployees(List<Employee> employees) {
+    int rowsUpdated = -1;
     try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
+      rowsUpdated = 0;
       for(Employee employee : employees) {
         String sqlCommand = "UPDATE Employees SET name=?, extension=?, email=?, startDate=?, departmentId=? WHERE id=?";
         PreparedStatement statement = connection.prepareStatement(sqlCommand);        
@@ -250,24 +255,28 @@ public class CompanyDataSQL {
         statement.setString(4, employee.getStartDate());
         statement.setInt(5, employee.getDepartmentId());
         statement.setInt(6, employee.getId());
-        int rowsUpdated = statement.executeUpdate();
-        if (rowsUpdated > 0) System.out.println("Employees updated " + rowsUpdated);
+        rowsUpdated += statement.executeUpdate();
       }
     }
     catch (SQLException e) {
       System.err.println(e.getMessage());
     }
+    System.out.println("bulkUpdateEmployees " + rowsUpdated);
+    return rowsUpdated;
   }
      
-  public void deleteAllEmployees() {
+  public Boolean deleteAllEmployees() {
+    Boolean result = false;
     try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
       String sqlCommand = "DELETE FROM Employees";
       Statement statement = connection.createStatement();
       statement.execute(sqlCommand);
+      result = true;
     }
     catch (SQLException e) {
       System.err.println(e.getMessage());
     }
+    return result;
   }
   
   // RESTful API /employees/ID
@@ -290,80 +299,91 @@ public class CompanyDataSQL {
     }
     catch (SQLException e) {
       System.err.println(e.getMessage());
-    }    
+    }
     return employee;
   }
-  
-  public void updateEmployee(int id, Employee employee) { 
-    try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
-      String sqlCommand = "UPDATE Employees SET name=?, extension=?, email=?, startDate=?, departmentId=? WHERE id=?";
-      PreparedStatement statement = connection.prepareStatement(sqlCommand);
-      statement.setString(1, employee.getName());
-      statement.setInt(2, employee.getExtension());
-      statement.setString(3, employee.getEmail());
-      statement.setString(4, employee.getStartDate());
-      statement.setInt(5, employee.getDepartmentId());
-      int rowsUpdated = statement.executeUpdate();
-      if (rowsUpdated > 0) System.out.println("Employee updated " + rowsUpdated);
+     
+  public int updateEmployee(int id, Employee employee) {
+    int rowsUpdated = -1;
+    if (id != employee.getId()) {
+      rowsUpdated = -2;
     }
-    catch (SQLException e) {
-      System.err.println(e.getMessage());
+    else {
+      try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
+        rowsUpdated = 0;
+        String sqlCommand = "UPDATE Employees SET name=?, extension=?, email=?, startDate=?, departmentId=? WHERE id=?";
+        PreparedStatement statement = connection.prepareStatement(sqlCommand);
+        statement.setString(1, employee.getName());
+        statement.setInt(2, employee.getExtension());
+        statement.setString(3, employee.getEmail());
+        statement.setString(4, employee.getStartDate());
+        statement.setInt(5, employee.getDepartmentId());
+        statement.setInt(6, id);
+        rowsUpdated = statement.executeUpdate();
+      } catch (SQLException e) {
+        System.err.println(e.getMessage());
+      }
     }
+    return rowsUpdated;
   }
-  
-  public void deleteEmployee(int id) {
+
+  public int deleteEmployee(int id) {
+    int rowsDeleted = -1;
     try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
       String sqlCommand = "DELETE FROM Employees WHERE id=?";
       PreparedStatement statement = connection.prepareStatement(sqlCommand);
       statement.setInt(1, id);
-      int rowsDeleted = statement.executeUpdate();
-      if(rowsDeleted > 0) System.out.println("Employees deleted " + rowsDeleted);
+      rowsDeleted = statement.executeUpdate();
     }
     catch (SQLException e) {
       System.err.println(e.getMessage());
     }
+    return rowsDeleted;
   }
   
   // RESTful API /departments/ID/employees
   
   public List<Employee> readEmployeesFromDepartment(int departmentId) {
-    List<Employee> employees = new ArrayList<>();
-    try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
-      String sqlCommand = "SELECT * FROM `Employees` WHERE departmentId = ?";
-      PreparedStatement statement = connection.prepareStatement(sqlCommand);
-      statement.setInt(1, departmentId);
-      ResultSet resultSet = statement.executeQuery();
-      while (resultSet.next()) {
-        Integer id = resultSet.getInt("id");
-        String name = resultSet.getString("name");
-        Integer extension = resultSet.getInt("extension");
-        String email = resultSet.getString("email");
-        String startDate = resultSet.getString("startDate");
-        Employee employee = new Employee(id, name, extension, email, startDate, departmentId);
-        employees.add(employee);
+    List<Employee> employees = null;
+    if (departmentExists(departmentId) > 0) {
+      try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
+        String sqlCommand = "SELECT * FROM `Employees` WHERE departmentId = ?";
+        PreparedStatement statement = connection.prepareStatement(sqlCommand);
+        statement.setInt(1, departmentId);
+        ResultSet resultSet = statement.executeQuery();
+        employees = new ArrayList<>();
+        while (resultSet.next()) {
+          Integer id = resultSet.getInt("id");
+          String name = resultSet.getString("name");
+          Integer extension = resultSet.getInt("extension");
+          String email = resultSet.getString("email");
+          String startDate = resultSet.getString("startDate");
+          Employee employee = new Employee(id, name, extension, email, startDate, departmentId);
+          employees.add(employee);
+        }
+      } catch (SQLException e) {
+        System.err.println(e.getMessage());
       }
     }
-    catch (SQLException e) {
-      System.err.println(e.getMessage());
-    }    
     return employees;
   }
   
-  public void deleteAllEmployeesFromDepartment(int departmentId) {
+  public int deleteAllEmployeesFromDepartment(int departmentId) {
+    int rowsDeleted = -1;
     try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
       String sqlCommand = "DELETE FROM Employees WHERE departmentId = ?";
       PreparedStatement statement = connection.prepareStatement(sqlCommand);
       statement.setInt(1, departmentId);
-      int rowsDeleted = statement.executeUpdate();
-      if(rowsDeleted > 0) System.out.println("Employees deleted " + rowsDeleted);
+      rowsDeleted = statement.executeUpdate();
     }
     catch (SQLException e) {
       System.err.println(e.getMessage());
     }
+    return rowsDeleted;
   }
   
   private static int selectColumnFromTable(String column, String table, String value) {
-    int count = 0;
+    int count = -1;
     try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
       String sqlCommand = "SELECT ? FROM ? WHERE ? = ?";
       PreparedStatement statement = connection.prepareStatement(sqlCommand);
@@ -372,6 +392,7 @@ public class CompanyDataSQL {
       statement.setString(3, column);
       statement.setString(4, value);
       ResultSet resultSet = statement.executeQuery();
+      count = 0;
       while (resultSet.next()) count++;
     }
     catch (SQLException e) {
@@ -380,9 +401,44 @@ public class CompanyDataSQL {
     return count;
   }
   
+  private static int departmentExists(int id) {
+    int count = -1;
+    try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
+      String sqlCommand = "SELECT name FROM Departments WHERE id = ?";
+      PreparedStatement statement = connection.prepareStatement(sqlCommand);
+      statement.setInt(1, id);
+      ResultSet resultSet = statement.executeQuery();
+      count = 0;
+      while (resultSet.next()) count++;
+    }
+    catch (SQLException e) {
+      System.err.println(e.getMessage());
+    }
+    return count;
+  }
+  
+  private static int employeeExists(Employee employee) {
+    int count = -1;
+    try (Connection connection = DriverManager.getConnection(URI, LOGIN, PASSWORD)) {
+      String sqlCommand = "SELECT name, email FROM Employees WHERE name = ? OR email = ?";
+      PreparedStatement statement = connection.prepareStatement(sqlCommand);
+      statement.setString(1, employee.getName());
+      statement.setString(2, employee.getEmail());
+      ResultSet resultSet = statement.executeQuery();
+      count = 0;
+      while (resultSet.next()) count++;
+    }
+    catch (SQLException e) {
+      System.err.println(e.getMessage());
+    }
+    return count;
+  }
+  
   public static void main(String[] args) {
     CompanyDataSQL companyData = new CompanyDataSQL();
     List<Department> departments = companyData.readAllDepartments();
-    System.out.println("Departments:" + departments);
+    System.out.println(departments);
+    List<Employee> employees = companyData.readAllEmployees();
+    System.out.println(employees);
   }
 }
